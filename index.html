@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <!-- Подключаем скрипт Телеграма, чтобы сайт понимал, что он в приложении -->
+    <script src="https://telegram.org"></script>
+    <style>
+        body { text-align: center; font-family: sans-serif; background: #f0f0f0; padding-top: 50px; }
+        button { padding: 20px 40px; font-size: 20px; cursor: pointer; border-radius: 15px; border: none; background: #0088cc; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Моя игра 🎮</h1>
+    <p>Счет: <span id="score">0</span></p>
+    <button onclick="hit()">Клик!</button>
+
+    <script>
+        let count = 0;
+        const webapp = window.Telegram.WebApp;
+        webapp.expand(); // Развернуть на весь экран
+
+        function hit() {
+            count++;
+            document.getElementById('score').innerText = count;
+            // Можно добавить вибрацию при клике
+            webapp.HapticFeedback.impactOccurred('light');
+        }
+    </script>
+</body>
+</html>
