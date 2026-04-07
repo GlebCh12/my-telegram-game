@@ -2,105 +2,157 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grid Survivor TMA</title>
-    <!-- Подключаем скрипт Telegram -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Grid Game</title>
     <script src="https://telegram.org"></script>
     <style>
-        body { margin: 0; padding: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; }
-        canvas { display: block; margin: 0 auto; background: #222; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        #game-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        canvas { border: 2px solid #444; box-shadow: 0 0 20px rgba(0,0,0,0.5); max-width: 95vw; max-height: 95vw; }
+        #ui { margin-bottom: 10px; font-weight: bold; text-shadow: 1px 1px 2px black; }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <div>HP: <span id="hp">100</span></div>
-        <div>Позиция: <span id="pos">0,9</span></div>
+    <div id="game-container">
+        <div id="ui">❤️ HP: <span id="hp">100</span> | 📍 Поз: <span id="pos">0,9</span></div>
+        <canvas id="gameCanvas"></canvas>
     </div>
-    <canvas id="gameCanvas"></canvas>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Расширяем на весь экран
+        tg.expand();
+        tg.ready();
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-
-        // Настройки сетки
         const GRID_SIZE = 10;
-        let cellSize = 0;
+        let cellSize;
 
-        // Типы чанков (клеток)
         const TILE_TYPES = {
-            EMPTY: { color: '#333', name: 'Пусто' },
-            FOREST: { color: '#2d5a27', name: 'Лес (Защита)', effect: 'defense' },
-            SWAMP: { color: '#4d4d29', name: 'Болото (Замедление)', effect: 'slow' },
-            LAVA: { color: '#8b2020', name: 'Лава (Урон)', effect: 'damage' }
+            EMPTY: { color: '#2c3e50', name: 'Пусто', damage: 0 },
+            LAVA: { color: '#e74c3c', name: 'Лава', damage: 10 },
+            SWAMP: { color: '#27ae60', name: 'Лес', damage: 0 }
         };
 
-        const grid = [];
-        let player = { x: 0, y: 9, hp: 100 }; // Левый нижний угол
-        let enemy = { x: 9, y: 0 };           // Правый верхний угол
+        const ITEMS = {
+            FOOD: { icon: '🍎', heal: 20 },
+            WEAPON: { icon: '⚔️', damage: 15 }
+        };
 
-        function initGame() {
-            // Ресайз канваса под экран телефона
-            const screenSide = Math.min(window.innerWidth, window.innerHeight);
-            canvas.width = screenSide;
-            canvas.height = screenSide;
-            cellSize = canvas.width / GRID_SIZE;
+        let grid = [];
+        let player = { x: 0, y: 9, hp: 100, inventory: [] };
+        let enemy = { x: 9, y: 0, hp: 100 };
+
+        function init() {
+            // Адаптивный размер
+            const size = Math.min(window.innerWidth * 0.95, window.innerHeight * 0.7);
+            canvas.width = size;
+            canvas.height = size;
+            cellSize = size / GRID_SIZE;
 
             // Генерация карты
-            const types = Object.values(TILE_TYPES);
             for (let y = 0; y < GRID_SIZE; y++) {
                 grid[y] = [];
                 for (let x = 0; x < GRID_SIZE; x++) {
-                    // Случайный тип клетки
-                    grid[y][x] = types[Math.floor(Math.random() * types.length)];
+                    const rand = Math.random();
+                    let type = TILE_TYPES.EMPTY;
+                    if (rand > 0.8) type = TILE_TYPES.LAVA;
+                    else if (rand > 0.6) type = TILE_TYPES.SWAMP;
+
+                    let item = null;
+                    if (Math.random() > 0.9) {
+                        item = Math.random() > 0.5 ? ITEMS.FOOD : ITEMS.WEAPON;
+                    }
+                    
+                    grid[y][x] = { type, item };
                 }
             }
+            // Гарантируем пустоту под игроком и врагом
+            grid[9][0].type = TILE_TYPES.EMPTY;
+            grid[0][9].type = TILE_TYPES.EMPTY;
+
             draw();
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Рисуем сетку
             for (let y = 0; y < GRID_SIZE; y++) {
                 for (let x = 0; x < GRID_SIZE; x++) {
-                    ctx.fillStyle = grid[y][x].color;
+                    // Рисуем клетку
+                    ctx.fillStyle = grid[y][x].type.color;
                     ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+
+                    // Рисуем предмет, если есть
+                    if (grid[y][x].item) {
+                        ctx.font = `${cellSize/2}px serif`;
+                        ctx.textAlign = "center";
+                        ctx.fillText(grid[y][x].item.icon, x * cellSize + cellSize/2, y * cellSize + cellSize/1.5);
+                    }
                 }
             }
 
-            // Рисуем игрока (Синий квадрат)
-            ctx.fillStyle = '#0088cc';
-            ctx.fillRect(player.x * cellSize + 5, player.y * cellSize + 5, cellSize - 10, cellSize - 10);
+            // Игрок (Синий круг)
+            ctx.fillStyle = "#3498db";
+            ctx.beginPath();
+            ctx.arc(player.x * cellSize + cellSize/2, player.y * cellSize + cellSize/2, cellSize/3, 0, Math.PI*2);
+            ctx.fill();
 
-            // Рисуем противника (Красный квадрат)
-            ctx.fillStyle = '#ff4444';
-            ctx.fillRect(enemy.x * cellSize + 5, enemy.y * cellSize + 5, cellSize - 10, cellSize - 10);
+            // Враг (Красный круг)
+            ctx.fillStyle = "#e67e22";
+            ctx.beginPath();
+            ctx.arc(enemy.x * cellSize + cellSize/2, enemy.y * cellSize + cellSize/2, cellSize/3, 0, Math.PI*2);
+            ctx.fill();
         }
 
-        // Управление кликом (движение к клетке)
-        canvas.addEventListener('click', (e) => {
+        canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
             const rect = canvas.getBoundingClientRect();
-            const clickX = Math.floor((e.clientX - rect.left) / cellSize);
-            const clickY = Math.floor((e.clientY - rect.top) / cellSize);
+            const x = Math.floor((touch.clientX - rect.left) / cellSize);
+            const y = Math.floor((touch.clientY - rect.top) / cellSize);
 
-            // Логика перемещения на 1 клетку
-            if (Math.abs(clickX - player.x) <= 1 && Math.abs(clickY - player.y) <= 1) {
-                player.x = clickX;
-                player.y = clickY;
-
-                // Обновляем UI
-                document.getElementById('pos').innerText = `${player.x},${player.y}`;
-                tg.HapticFeedback.impactOccurred('light'); // Вибрация при движении
-
-                draw();
+            if (Math.abs(x - player.x) <= 1 && Math.abs(y - player.y) <= 1) {
+                movePlayer(x, y);
             }
         });
 
-        window.onload = initGame;
+        function movePlayer(nx, ny) {
+            player.x = nx;
+            player.y = ny;
+
+            const tile = grid[ny][nx];
+            
+            // Эффект клетки
+            if (tile.type.damage > 0) {
+                player.hp -= tile.type.damage;
+                tg.HapticFeedback.notificationOccurred('error');
+            } else {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            // Подбор предмета
+            if (tile.item) {
+                if (tile.item.heal) {
+                    player.hp = Math.min(100, player.hp + tile.item.heal);
+                    tg.showScanQrPopup({ text: "Съедено яблоко! +20 HP" }); // Маленький хак для уведомления
+                    setTimeout(() => tg.closeScanQrPopup(), 1000);
+                }
+                tile.item = null; // Удаляем предмет с поля
+            }
+
+            if (player.hp <= 0) {
+                tg.showAlert("Игра окончена! Вы погибли.");
+                player.hp = 100;
+                player.x = 0; player.y = 9;
+            }
+
+            document.getElementById('hp').innerText = player.hp;
+            document.getElementById('pos').innerText = `${player.x},${player.y}`;
+            draw();
+        }
+
+        window.addEventListener('resize', init);
+        window.onload = init;
     </script>
 </body>
 </html>
