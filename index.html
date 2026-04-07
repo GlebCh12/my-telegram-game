@@ -2,29 +2,105 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <!-- Подключаем скрипт Телеграма, чтобы сайт понимал, что он в приложении -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Grid Survivor TMA</title>
+    <!-- Подключаем скрипт Telegram -->
     <script src="https://telegram.org"></script>
     <style>
-        body { text-align: center; font-family: sans-serif; background: #f0f0f0; padding-top: 50px; }
-        button { padding: 20px 40px; font-size: 20px; cursor: pointer; border-radius: 15px; border: none; background: #0088cc; color: white; }
+        body { margin: 0; padding: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; }
+        canvas { display: block; margin: 0 auto; background: #222; }
+        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; }
     </style>
 </head>
 <body>
-    <h1>Моя игра 🎮</h1>
-    <p>Счет: <span id="score">0</span></p>
-    <button onclick="hit()">Клик!</button>
+    <div id="ui">
+        <div>HP: <span id="hp">100</span></div>
+        <div>Позиция: <span id="pos">0,9</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        let count = 0;
-        const webapp = window.Telegram.WebApp;
-        webapp.expand(); // Развернуть на весь экран
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Расширяем на весь экран
 
-        function hit() {
-            count++;
-            document.getElementById('score').innerText = count;
-            // Можно добавить вибрацию при клике
-            webapp.HapticFeedback.impactOccurred('light');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Настройки сетки
+        const GRID_SIZE = 10;
+        let cellSize = 0;
+
+        // Типы чанков (клеток)
+        const TILE_TYPES = {
+            EMPTY: { color: '#333', name: 'Пусто' },
+            FOREST: { color: '#2d5a27', name: 'Лес (Защита)', effect: 'defense' },
+            SWAMP: { color: '#4d4d29', name: 'Болото (Замедление)', effect: 'slow' },
+            LAVA: { color: '#8b2020', name: 'Лава (Урон)', effect: 'damage' }
+        };
+
+        const grid = [];
+        let player = { x: 0, y: 9, hp: 100 }; // Левый нижний угол
+        let enemy = { x: 9, y: 0 };           // Правый верхний угол
+
+        function initGame() {
+            // Ресайз канваса под экран телефона
+            const screenSide = Math.min(window.innerWidth, window.innerHeight);
+            canvas.width = screenSide;
+            canvas.height = screenSide;
+            cellSize = canvas.width / GRID_SIZE;
+
+            // Генерация карты
+            const types = Object.values(TILE_TYPES);
+            for (let y = 0; y < GRID_SIZE; y++) {
+                grid[y] = [];
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    // Случайный тип клетки
+                    grid[y][x] = types[Math.floor(Math.random() * types.length)];
+                }
+            }
+            draw();
         }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Рисуем сетку
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    ctx.fillStyle = grid[y][x].color;
+                    ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+                }
+            }
+
+            // Рисуем игрока (Синий квадрат)
+            ctx.fillStyle = '#0088cc';
+            ctx.fillRect(player.x * cellSize + 5, player.y * cellSize + 5, cellSize - 10, cellSize - 10);
+
+            // Рисуем противника (Красный квадрат)
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(enemy.x * cellSize + 5, enemy.y * cellSize + 5, cellSize - 10, cellSize - 10);
+        }
+
+        // Управление кликом (движение к клетке)
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = Math.floor((e.clientX - rect.left) / cellSize);
+            const clickY = Math.floor((e.clientY - rect.top) / cellSize);
+
+            // Логика перемещения на 1 клетку
+            if (Math.abs(clickX - player.x) <= 1 && Math.abs(clickY - player.y) <= 1) {
+                player.x = clickX;
+                player.y = clickY;
+
+                // Обновляем UI
+                document.getElementById('pos').innerText = `${player.x},${player.y}`;
+                tg.HapticFeedback.impactOccurred('light'); // Вибрация при движении
+
+                draw();
+            }
+        });
+
+        window.onload = initGame;
     </script>
 </body>
 </html>
